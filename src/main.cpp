@@ -21,10 +21,8 @@ static float m_scale = 5;
 unsigned int nIndices;
 
 GLuint programID;
-GLuint skyboxProgramID;
 
 GLuint heightmapTextureID;
-GLuint skyBoxTextureID;
 
 // rock textures
 GLuint rocksTextureID;
@@ -53,44 +51,6 @@ std::vector<glm::vec3> terrainVertices;
 
 glm::vec3 lightPos;
 float heightScaler;
-
-// Sky Box Variables 
-float skyboxVertices[] =
-{
-	//   Coordinates
-	-1.0f, -1.0f,  1.0f,//        7--------6
-	 1.0f, -1.0f,  1.0f,//       /|       /|
-	 1.0f, -1.0f, -1.0f,//      4--------5 |
-	-1.0f, -1.0f, -1.0f,//      | |      | |
-	-1.0f,  1.0f,  1.0f,//      | 3------|-2
-	 1.0f,  1.0f,  1.0f,//      |/       |/
-	 1.0f,  1.0f, -1.0f,//      0--------1
-	-1.0f,  1.0f, -1.0f
-};
-
-unsigned int skyboxIndices[] =
-{
-	// Right
-	1, 2, 6,
-	6, 5, 1,
-	// Left
-	0, 4, 7,
-	7, 3, 0,
-	// Top
-	4, 5, 6,
-	6, 7, 4,
-	// Bottom
-	0, 3, 2,
-	2, 1, 0,
-	// Back
-	0, 1, 5,
-	5, 4, 0,
-	// Front
-	3, 7, 6,
-	6, 2, 3
-};
-
-unsigned int skyboxVAO, skyboxVBO, skyboxEBO;
 
 bool initializeGL()
   {
@@ -383,47 +343,6 @@ void LoadTextures () {
 	glGenerateMipmap(GL_TEXTURE_2D);
 
 	glBindTexture(GL_TEXTURE_2D, -1);
-
-	// All the faces of the cubemap (make sure they are in this exact order)
-	std::string facesCubemap[6] =
-	{
-		"skybox/right.bmp",
-		"skybox/left.bmp",
-		"skybox/top.bmp",
-		"skybox/bottom.bmp",
-		"skybox/front.bmp",
-		"skybox/back.bmp"
-	};
-
-	// Creates the cubemap texture object
-	glGenTextures(1, &skyBoxTextureID);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, skyBoxTextureID);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	// These are very important to prevent seams
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	// This might help with seams on some systems
-	//glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-
-	// Cycles through all the textures and attaches them to the cubemap object
-	for (unsigned int i = 0; i < 6; i++)
-	{
-		int width, height;
-		unsigned char* data = nullptr;
-		loadBMP_custom(facesCubemap[i].c_str(), width, height, data);
-		if (data)
-		{
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
-			delete[] data;
-		}
-		else
-		{
-			std::cout << "Failed to load texture: " << facesCubemap[i] << std::endl;
-			delete[] data;
-		}
-	}
 }
 
 bool readAndCompileShader(const char* shader_path, const GLuint& id) {
@@ -517,23 +436,6 @@ void UnloadTextures()
 
 void UnloadShaders() {
 	glDeleteProgram(programID);
-	glDeleteProgram(skyboxProgramID);
-}
-
-void LoadSkyBox() {
-	// Create VAO, VBO, and EBO for the skybox
-	glGenVertexArrays(1, &skyboxVAO);
-	glGenBuffers(1, &skyboxVBO);
-	glGenBuffers(1, &skyboxEBO);
-	glBindVertexArray(skyboxVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxEBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), &skyboxIndices, GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 int main() {
@@ -541,20 +443,14 @@ int main() {
 
 	LoadTextures();
 	LoadModel();
-	LoadSkyBox();
-
-	skyboxProgramID = glCreateProgram();
-	LoadShaders(skyboxProgramID, "Skybox.vert", "Skybox.frag");
 
 	programID = glCreateProgram();
 	LoadShaders(programID, "Basic.vert", "Texture.frag");
 
 	glClearColor(0.7f, 0.8f, 1.0f, 0.0f);
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 	glEnable(GL_CULL_FACE);
-
-	// Uses counter clock-wise standard
-	glFrontFace(GL_CCW);
 
 	lightPos = glm::vec3(0, -0.5, -0.5);
 	heightScaler = 1.0f;
@@ -566,7 +462,6 @@ int main() {
 		if (canReload && glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE) {
 			UnloadShaders();
 			LoadShaders(programID, "Basic.vert", "Texture.frag");
-			LoadShaders(skyboxProgramID, "Skybox.vert", "Skybox.frag");
 			std::cout << "Shaders Reloaded!" << std::endl;
 			canReload = false;
 		}
@@ -606,13 +501,8 @@ int main() {
 		glm::mat4 ViewMatrix = getViewMatrix();
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
-		glm::mat4 SkyBoxViewMatrix = getSkyboxViewMatrix();
 
-		// Render Base mesh
-		glDepthFunc(GL_LESS);
-		glCullFace(GL_BACK);
-
-		glBindVertexArray(VertexArrayID);
+		// First pass: Base mesh
 		glUseProgram(programID);
 
 		// Get a handle for our uniforms
@@ -692,30 +582,6 @@ int main() {
 			GL_UNSIGNED_INT, // type
 			(void*)0 // element array buffer offset
 		);
-
-		// Render Sky Box
-		glBindVertexArray(skyboxVAO);
-
-		glCullFace(GL_FRONT);
-		glDepthFunc(GL_LEQUAL);
-
-		glUseProgram(skyboxProgramID);
-
-		// Set sky box uniforms		
-		glUniformMatrix4fv(glGetUniformLocation(skyboxProgramID, "view"), 1, GL_FALSE, &SkyBoxViewMatrix[0][0]);
-		glUniformMatrix4fv(glGetUniformLocation(skyboxProgramID, "projection"), 1, GL_FALSE, &ProjectionMatrix[0][0]);
-
-		// Draws the cubemap as the last object so we can save a bit of performance by discarding all fragments
-		// where an object is present (a depth of 1.0f will always fail against any object's depth value)
-		glBindVertexArray(skyboxVAO);
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, skyBoxTextureID);
-		glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-		glBindVertexArray(0);
-
-		glDepthFunc(GL_LESS);
 
 		// Swap buffers
 		glfwSwapBuffers(window);
