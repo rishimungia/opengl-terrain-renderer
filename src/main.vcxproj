@@ -110,6 +110,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Basic.vert" />
+    <None Include="..\Billboard.frag" />
+    <None Include="..\Billboard.geom" />
+    <None Include="..\Billboard.vert" />
+    <None Include="..\Skybox.frag" />
+    <None Include="..\Skybox.vert" />
+    <None Include="..\Terrain.tesc" />
+    <None Include="..\Terrain.tese" />
     <None Include="..\Texture.frag" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -11,12 +11,16 @@ using namespace glm;
 
 glm::mat4 ViewMatrix;
 glm::mat4 ProjectionMatrix;
+glm::mat4 SkyboxViewMatrix = glm::mat4(1.0f);
 
 glm::mat4 getViewMatrix() {
 	return ViewMatrix;
 }
 glm::mat4 getProjectionMatrix() {
 	return ProjectionMatrix;
+}
+glm::mat4 getSkyboxViewMatrix() {
+	return SkyboxViewMatrix;
 }
 
 
@@ -103,6 +107,8 @@ void computeMatricesFromInputs() {
 		position + direction, // and looks here : at the same position, plus "direction"
 		up                  // Head is up (set to 0,-1,0 to look upside-down)
 	);
+
+	SkyboxViewMatrix = glm::mat4(glm::mat3(glm::lookAt(position, position + direction, up)));
 
 	// For the next frame, the "last time" will be "now"
 	lastTime = currentTime;

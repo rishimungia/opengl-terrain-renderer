@@ -21,8 +21,12 @@ static float m_scale = 5;
 unsigned int nIndices;
 
 GLuint programID;
+GLuint skyboxProgramID;
+GLuint billboardProgramID;
 
 GLuint heightmapTextureID;
+GLuint skyboxTextureID;
+GLuint flowerTextureID;
 
 // rock textures
 GLuint rocksTextureID;
@@ -51,6 +55,44 @@ std::vector<glm::vec3> terrainVertices;
 
 glm::vec3 lightPos;
 float heightScaler;
+
+// Skybox variables
+float skyboxVertices[] =
+{
+	//   Coordinates
+	-1.0f, -1.0f,  1.0f,
+	 1.0f, -1.0f,  1.0f,
+	 1.0f, -1.0f, -1.0f,
+	-1.0f, -1.0f, -1.0f,
+	-1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f, -1.0f,
+	-1.0f,  1.0f, -1.0f
+};
+
+unsigned int skyboxIndices[] =
+{
+	// Right
+	1, 2, 6,
+	6, 5, 1,
+	// Left
+	0, 4, 7,
+	7, 3, 0,
+	// Top
+	4, 5, 6,
+	6, 7, 4,
+	// Bottom
+	0, 3, 2,
+	2, 1, 0,
+	// Back
+	0, 1, 5,
+	5, 4, 0,
+	// Front
+	3, 7, 6,
+	6, 2, 3
+};
+
+GLuint skyboxVAO, skyboxVBO, skyboxEBO;
 
 bool initializeGL()
   {
@@ -104,10 +146,9 @@ bool initializeGL()
 }
 
 using namespace glm;
-
 void LoadModel()
 {
-	std::vector<glm::vec3> vertices;
+	//std::vector<glm::vec3> vertices;
 	std::vector<glm::vec2> uvs;
 	std::vector<unsigned int> indices;
 
@@ -117,7 +158,7 @@ void LoadModel()
 		for (int j = 0; j < n_points; j++)
 		{
 			float z = (m_scale) * ((j / float(n_points - 1)) - 0.5f) * 2.0f;
-			vertices.push_back(vec3(x, std::rand() / ((RAND_MAX + 1u) / 1), z));
+			terrainVertices.push_back(vec3(x, std::rand() / ((RAND_MAX + 1u) / 1), z));
 			uvs.push_back(vec2(float(i + 0.5f) / float(n_points - 1), float(j + 0.5f) / float(n_points - 1)));
 		}
 	}
@@ -146,7 +187,7 @@ void LoadModel()
 	glEnableVertexAttribArray(0);
 	glGenBuffers(1, &vertexbuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, terrainVertices.size() * sizeof(glm::vec3), &terrainVertices[0], GL_STATIC_DRAW);
 	glVertexAttribPointer(
 		0, // attribute
 		3, // size (we have x,y,z)
@@ -165,8 +206,7 @@ void LoadModel()
 	glGenBuffers(1, &elementbuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
-	
-	//inside function
+
 	nIndices = indices.size();
 }
 
@@ -379,7 +419,6 @@ bool readAndCompileShader(const char* shader_path, const GLuint& id) {
 
 void LoadShaders(GLuint& program, const char* vertex_file_path, const char* fragment_file_path)
 {
-	// Create the shaders - tasks 1 and 2 
 	GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
 	GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 	bool vok = readAndCompileShader(vertex_file_path, VertexShaderID);
@@ -409,16 +448,58 @@ void LoadShaders(GLuint& program, const char* vertex_file_path, const char* frag
 	glDeleteShader(FragmentShaderID);
 }
 
+void LoadShaders(GLuint& program, const char* vertex_file_path, const char* fragment_file_path, const char* geometry_file_path) {
+	GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
+	GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
+	GLuint GeometryShaderID = glCreateShader(GL_GEOMETRY_SHADER);
+
+	bool vok = readAndCompileShader(vertex_file_path, VertexShaderID);
+	bool fok = readAndCompileShader(fragment_file_path, FragmentShaderID);
+	bool gok = readAndCompileShader(geometry_file_path, GeometryShaderID);
+
+	if (vok && fok && gok) {
+		GLint Result = GL_FALSE;
+		int InfoLogLength;
+		std::cout << "Linking program" << std::endl;
+		program = glCreateProgram();
+		glAttachShader(program, VertexShaderID);
+		glAttachShader(program, FragmentShaderID);
+		glAttachShader(program, GeometryShaderID);
+		glLinkProgram(program);
+		glGetProgramiv(program, GL_LINK_STATUS, &Result);
+		glGetProgramiv(program, GL_INFO_LOG_LENGTH, &InfoLogLength);
+		if (InfoLogLength > 0) {
+			std::vector<char> ProgramErrorMessage(InfoLogLength + 1);
+			glGetProgramInfoLog(program, InfoLogLength, NULL, &ProgramErrorMessage[0]);
+			std::cout << &ProgramErrorMessage[0];
+		}
+		std::cout << "Linking program: " << (Result == GL_TRUE ? "Success" : "Failed!") << std::endl;
+	}
+	else {
+		std::cout << "Program will not be linked: one of the shaders has an error" << std::endl;
+	}
+
+	glDeleteShader(VertexShaderID);
+	glDeleteShader(FragmentShaderID);
+	glDeleteShader(GeometryShaderID);
+}
+
 void UnloadModel()
 {
 	glDeleteBuffers(1, &vertexbuffer);
 	glDeleteBuffers(1, &uvbuffer);
 	glDeleteBuffers(1, &elementbuffer);
 	glDeleteVertexArrays(1, &VertexArrayID);
+
+	// skybox
+	glDeleteBuffers(1, &skyboxVBO);
+	glDeleteBuffers(1, &skyboxEBO);
+	glDeleteVertexArrays(1, &skyboxVAO);
 }
 
 void UnloadTextures()
 {
+	// terrain
 	glDeleteTextures(1, &heightmapTextureID);
 	
 	glDeleteTextures(1, &rocksTextureID);
@@ -432,24 +513,125 @@ void UnloadTextures()
 	glDeleteTextures(1, &snowTextureID);
 	glDeleteTextures(1, &snowRoughnessID);
 	glDeleteTextures(1, &snowNormalmapID);
+
+	// skybox
+	glDeleteTextures(1, &skyboxTextureID);
+
+	// billboard
+	glDeleteTextures(1, &flowerTextureID);
 }
 
 void UnloadShaders() {
 	glDeleteProgram(programID);
+	glDeleteProgram(skyboxProgramID);
+	glDeleteProgram(billboardProgramID);
+}
+
+void LoadSkybox() {
+	// Create VAO, VBO, and EBO for the skybox
+	glGenVertexArrays(1, &skyboxVAO);
+	glGenBuffers(1, &skyboxVBO);
+	glGenBuffers(1, &skyboxEBO);
+	glBindVertexArray(skyboxVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), &skyboxIndices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	std::string facesCubemap[6] =
+	{
+		"skybox/right.bmp",
+		"skybox/left.bmp",
+		"skybox/top.bmp",
+		"skybox/bottom.bmp",
+		"skybox/front.bmp",
+		"skybox/back.bmp"
+	};
+
+	// Creates the cubemap texture object
+	glGenTextures(1, &skyboxTextureID);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTextureID);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	// These are very important to prevent seams
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	
+	// Cycles through all the textures and attaches them to the cubemap object
+	for (unsigned int i = 0; i < 6; i++)
+	{
+		int width, height;
+		unsigned char* data;
+		loadBMP_custom(facesCubemap[i].c_str(), width, height, data);
+		if (data)
+		{
+			glTexImage2D
+			(
+				GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+				0,
+				GL_RGB,
+				width,
+				height,
+				0,
+				GL_BGR,
+				GL_UNSIGNED_BYTE,
+				data
+			);
+			delete[] data;
+		}
+		else
+		{
+			std::cout << "Failed to load texture: " << facesCubemap[i] << std::endl;
+			delete[] data;
+		}
+	}
+}
+
+void LoadBillboard() {
+	// load texture
+	glGenTextures(1, &flowerTextureID);
+	glBindTexture(GL_TEXTURE_2D, flowerTextureID);
+
+	int width, height;
+	unsigned char* data;
+	loadBMP_custom("sun_flower.bmp", width, height, data);
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
+	delete[] data;
+
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 int main() {
 	if (!initializeGL()) return -1;
 
+	LoadSkybox();
 	LoadTextures();
 	LoadModel();
+	LoadBillboard();
 
 	programID = glCreateProgram();
 	LoadShaders(programID, "Basic.vert", "Texture.frag");
 
+	skyboxProgramID = glCreateProgram();
+	LoadShaders(skyboxProgramID, "Skybox.vert", "Skybox.frag");
+
+	billboardProgramID = glCreateProgram();
+	LoadShaders(billboardProgramID, "Billboard.vert", "Billboard.frag", "Billboard.geom");
+
 	glClearColor(0.7f, 0.8f, 1.0f, 0.0f);
 	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
 	glEnable(GL_CULL_FACE);
 
 	lightPos = glm::vec3(0, -0.5, -0.5);
@@ -462,6 +644,8 @@ int main() {
 		if (canReload && glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE) {
 			UnloadShaders();
 			LoadShaders(programID, "Basic.vert", "Texture.frag");
+			LoadShaders(skyboxProgramID, "Skybox.vert", "Skybox.frag");
+			LoadShaders(billboardProgramID, "Billboard.vert", "Billboard.frag", "Billboard.geom");
 			std::cout << "Shaders Reloaded!" << std::endl;
 			canReload = false;
 		}
@@ -501,8 +685,12 @@ int main() {
 		glm::mat4 ViewMatrix = getViewMatrix();
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+		glm::mat4 SkyboxViewMatrix = getSkyboxViewMatrix();
 
-		// First pass: Base mesh
+		// #### Base Terrain Pass ####
+		glDepthFunc(GL_LESS);
+		glCullFace(GL_BACK);
+
 		glUseProgram(programID);
 
 		// Get a handle for our uniforms
@@ -528,6 +716,9 @@ int main() {
 		// set light position uniform
 		GLuint lightPosID = glGetUniformLocation(programID, "lightPosition");
 		glUniform3f(lightPosID, lightPos.x, lightPos.y, lightPos.z);
+
+		// load terrain vertices
+		glBindVertexArray(VertexArrayID);
 		
 		// activate heightmap texture
 		glActiveTexture(GL_TEXTURE0 + 0);
@@ -582,6 +773,50 @@ int main() {
 			GL_UNSIGNED_INT, // type
 			(void*)0 // element array buffer offset
 		);
+
+		// #### Billboard Pass ####
+		glm::mat4 gVP = ProjectionMatrix * ViewMatrix;
+
+		glUseProgram(billboardProgramID);
+
+		GLuint BillboardMatrixID = glGetUniformLocation(billboardProgramID, "gVP");
+		glUniformMatrix4fv(BillboardMatrixID, 1, GL_FALSE, &gVP[0][0]);
+
+		GLuint billBoardHeightScalerID = glGetUniformLocation(billboardProgramID, "heightScaler");
+		glUniform1f(billBoardHeightScalerID, heightScaler);
+		
+		GLuint billboardRandomID = glGetUniformLocation(billboardProgramID, "random");
+		glUniform1f(billboardRandomID, terrainVertices[0].y);
+
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_2D, heightmapTextureID);
+		glUniform1i(glGetUniformLocation(billboardProgramID, "heightmapTexture"), 0);
+
+		glActiveTexture(GL_TEXTURE0 + 1);
+		glBindTexture(GL_TEXTURE_2D, flowerTextureID);
+		glUniform1i(glGetUniformLocation(billboardProgramID, "billboardTexture"), 1);
+
+		glBindVertexArray(VertexArrayID);
+
+		glDrawArrays(GL_POINTS, 0, nIndices);
+
+		// #### Skybox Pass ####
+		glDepthFunc(GL_LEQUAL);
+		glCullFace(GL_FRONT);
+
+		glUseProgram(skyboxProgramID);
+
+		glUniformMatrix4fv(glGetUniformLocation(skyboxProgramID, "view"), 1, GL_FALSE, &SkyboxViewMatrix[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(skyboxProgramID, "projection"), 1, GL_FALSE, &ProjectionMatrix[0][0]);
+
+		glBindVertexArray(skyboxVAO);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTextureID);
+		glUniform1i(glGetUniformLocation(skyboxProgramID, "skybox"), 0);
+
+		glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
 
 		// Swap buffers
 		glfwSwapBuffers(window);

@@ -68,7 +68,6 @@ void main() {
 	// normal = vertexNormal;
 
 	// Phong Shading
-//	vec3 lightColor = vec3(0.93, 0.84, 0.62);
 	vec3 lightColor = vec3(0.98, 0.9, 0.72);
 
 	// get roughness from texture
